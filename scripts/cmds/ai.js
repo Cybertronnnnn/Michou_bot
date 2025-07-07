@@ -1,35 +1,66 @@
-async function ai(prompt, id, name, system, gender, model, nsfw, customSystem, link = "") {
-  const openRouterApiKey = "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"; // Mets ta clé ici
-  
-  const sysPrompt = customSystem.find(x => x[system])?.[system] || "You are a helpful assistant.";
-
-  try {
-    const response = await post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "openai/gpt-4", // ou un autre modèle dispo sur OpenRouter
-        messages: [
-          { role: "system", content: sysPrompt },
-          { role: "user", content: prompt }
-        ]
-      },
-      {
-        headers: {
-          "Authorization": `Bearer ${openRouterApiKey}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    const result = response.data.choices?.[0]?.message?.content || "Aucune réponse.";
-    return { result };
-  } catch (err) {
-    const e = err.response?.data;
-    const errorMessage = typeof e === 'string' ? e : JSON.stringify(e);
-    return {
-      result: errorMessage.includes("Payload Too Large") ? "Your text is too long" :
-              errorMessage.includes("Unauthorized") ? "Invalid OpenRouter API key." :
-              e?.error?.message || err.message || "Unknown error"
-    };
-  }
+const { getPrefix, getStreamFromURL, uploadImgbb } = global.utils;
+async function ai({ message: m, event: e, args: a, usersData: u }) {
+  var p = [`${await getPrefix(e.threadID)}${this.config.name}`,
+`${this.config.name}`
+/*"ai"
+*you can add more prefix here
+*/
+]; 
+ if (p.some(b => a[0].toLowerCase().startsWith(b))) {
+try {      
+let prompt = "";
+if (e.type === "message_reply" && e.messageReply.attachments && e.messageReply.attachments[0]?.type === "photo") {
+ const b = await uploadImgbb(e.messageReply.attachments[0].url);
+prompt = a.slice(1).join(" ") + ' ' + b.image.url;
+} else {
+ prompt = a.slice(1).join(" ");
 }
+ var __ = [{ id: e.senderID, tag: await u.getName(e.senderID) }];
+ const r = await require("axios").post(`https://test-ai-ihc6.onrender.com/api`, {
+  prompt: prompt,
+ apikey: "GayKey-oWHmMb1t8ASljhpgSSUI",
+  name: __[0]['tag'],
+ id: __[0]['id'],
+ });
+var _ = r.data.result.replace(/{name}/g, __[0]['tag']).replace(/{pn}/g, p[0]);
+ if (r.data.av) {
+ if (Array.isArray(r.data.av)) {
+ const avs = r.data.av.map(url => getStreamFromURL(url));
+ const avss = await Promise.all(avs);
+  m.reply({
+ body: _,
+ mentions: __,
+ attachment: avss
+ });
+ } else {
+ m.reply({
+ body: _,
+ mentions: __,
+attachment: await getStreamFromURL(r.data.av)
+  });
+  }
+  } else {
+m.reply({
+body: _,
+mentions: __
+  });
+  }
+  } catch (error) {
+ m.reply("Error " + error);
+ }
+ }
+}
+module.exports = {
+config: {
+ name: "ai",
+aliases: [],
+version: 1.6,
+author: "Jun",
+role: 0,
+ shortDescription: "An AI that can do various tasks",
+ guide: "{pn} <query>",
+ category: "AI"
+ },
+ onStart: function() {},
+ onChat: ai
+};
